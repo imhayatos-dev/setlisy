@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://setlisy.example.com"),
+  metadataBase: new URL("https://setlisy.vercel.app/"),
   title: {
     default: "Setlisy",
     template: "%s | Setlisy",
@@ -51,6 +51,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#111111",
 };
+
+<meta name="google-site-verification" content="HsbW2y1hnD9Hs5rseUOrM4evmPChJxcDbrnqrVStGiM" />
 
 export default function RootLayout({
   children,
