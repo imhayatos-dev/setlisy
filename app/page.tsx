@@ -1,9 +1,10 @@
 "use client";
 
 import BrandLogo from "@/components/BrandLogo";
+import { exportElementToLandscapePdf } from "@/lib/exportPdf";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import type { SetlistData, Song } from "@/types/setlist";
 
 type AppMode = "home" | "setlist" | "stagePreset" | "stageEditor";
@@ -85,11 +86,13 @@ export default function Home() {
   const [members, setMembers] = useState(4);
   const [vocalStyle, setVocalStyle] = useState<VocalStyle>("pin");
   const [loaded, setLoaded] = useState(false);
+  const [isSetlistExporting, setIsSetlistExporting] = useState(false);
+  const setlistPreviewRef = useRef<HTMLDivElement>(null);
   const [setlistSaveStatus, setSetlistSaveStatus] =
-    useState<SaveStatus>("idle");
+  useState<SaveStatus>("idle");
 
-  const [stageSaveStatus, setStageSaveStatus] =
-    useState<SaveStatus>("idle");
+const [stageSaveStatus, setStageSaveStatus] =
+  useState<SaveStatus>("idle");
 
   useEffect(() => {
     try {
@@ -112,46 +115,46 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!loaded) {
-      return;
+  if (!loaded) {
+    return;
+  }
+
+  setSetlistSaveStatus("saving");
+
+  const timer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(SETLIST_KEY, JSON.stringify(data));
+      setSetlistSaveStatus("saved");
+    } catch {
+      setSetlistSaveStatus("idle");
     }
+  }, 750);
 
-    setSetlistSaveStatus("saving");
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [data, loaded]);
 
-    const timer = window.setTimeout(() => {
-      try {
-        localStorage.setItem(SETLIST_KEY, JSON.stringify(data));
-        setSetlistSaveStatus("saved");
-      } catch {
-        setSetlistSaveStatus("idle");
-      }
-    }, 750);
+useEffect(() => {
+  if (!loaded) {
+    return;
+  }
 
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [data, loaded]);
+  setStageSaveStatus("saving");
 
-  useEffect(() => {
-    if (!loaded) {
-      return;
+  const timer = window.setTimeout(() => {
+    try {
+      localStorage.setItem(STAGE_KEY, JSON.stringify(stage));
+      setStageSaveStatus("saved");
+    } catch {
+      setStageSaveStatus("idle");
     }
+  }, 750);
 
-    setStageSaveStatus("saving");
-
-    const timer = window.setTimeout(() => {
-      try {
-        localStorage.setItem(STAGE_KEY, JSON.stringify(stage));
-        setStageSaveStatus("saved");
-      } catch {
-        setStageSaveStatus("idle");
-      }
-    }, 750);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [stage, loaded]);
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [stage, loaded]);
 
   const totalMinutes = useMemo(() => {
     return data.songs.reduce((sum, song) => {
@@ -262,6 +265,7 @@ export default function Home() {
         setStage={setStage}
         selectedId={selectedId}
         setSelectedId={setSelectedId}
+        saveStatus={stageSaveStatus}
         onBack={() => setMode("stagePreset")}
       />
     );
@@ -277,6 +281,8 @@ export default function Home() {
 </div>
 
         <div className="headerActions">
+          <SaveIndicator status={setlistSaveStatus} />
+
           <button
             className="ghostButton"
             onClick={() => setMode("home")}
@@ -513,6 +519,7 @@ export default function Home() {
           <SetlistPreview
             data={data}
             totalMinutes={totalMinutes}
+            exportRef={setlistPreviewRef}
           />
         )}
       </section>
@@ -536,9 +543,26 @@ export default function Home() {
         ) : (
           <button
             className="primaryButton"
-            onClick={() => window.print()}
+            disabled={isSetlistExporting}
+            onClick={async () => {
+              if (!setlistPreviewRef.current) return;
+
+              setIsSetlistExporting(true);
+
+              try {
+                await exportElementToLandscapePdf(
+                  setlistPreviewRef.current,
+                  createPdfFileName(
+                    data.artistName || data.eventName || "setlist",
+                    "setlist",
+                  ),
+                );
+              } finally {
+                setIsSetlistExporting(false);
+              }
+            }}
           >
-            印刷・PDF保存
+            {isSetlistExporting ? "PDF生成中…" : "PDFを保存"}
           </button>
         )}
       </footer>
@@ -693,6 +717,7 @@ function StageEditor({
   setStage,
   selectedId,
   setSelectedId,
+  saveStatus,
   onBack,
 }: {
   stage: StageData;
@@ -701,6 +726,7 @@ function StageEditor({
   ) => void;
   selectedId: string | null;
   setSelectedId: (id: string | null) => void;
+  saveStatus: SaveStatus;
   onBack: () => void;
 }) {
   const selectedItem = stage.items.find(
@@ -708,6 +734,8 @@ function StageEditor({
   );
 
   const canvasRef = useRef<HTMLDivElement>(null);
+  const stageDocumentRef = useRef<HTMLElement>(null);
+  const [isStageExporting, setIsStageExporting] = useState(false);
   const dragRef = useRef<{
     id: string;
     dx: number;
@@ -844,13 +872,33 @@ function StageEditor({
           プリセットへ
         </button>
 
-        <strong>セット図エディター</strong>
+        <div className="stageToolbarTitle">
+          <strong>セット図エディター</strong>
+          <SaveIndicator status={saveStatus} />
+        </div>
 
         <button
           className="primaryButton"
-          onClick={() => window.print()}
+          disabled={isStageExporting}
+          onClick={async () => {
+            if (!stageDocumentRef.current) return;
+
+            setIsStageExporting(true);
+
+            try {
+              await exportElementToLandscapePdf(
+                stageDocumentRef.current,
+                createPdfFileName(
+                  stage.artist || stage.title || "stage-plot",
+                  "stage-plot",
+                ),
+              );
+            } finally {
+              setIsStageExporting(false);
+            }
+          }}
         >
-          印刷・PDF保存
+          {isStageExporting ? "PDF生成中…" : "PDFを保存"}
         </button>
       </header>
 
@@ -868,7 +916,7 @@ function StageEditor({
           ))}
         </aside>
 
-        <section className="stageDocument">
+        <section ref={stageDocumentRef} className="stageDocument">
           <div className="stageMeta">
             <Field
               label="イベント名"
@@ -917,15 +965,34 @@ function StageEditor({
           </div>
 
           <div className="stagePrintHeader">
-            <div>
-              <p>STAGE PLOT</p>
-              <h2>{stage.title || "イベント名"}</h2>
+            <div className="stagePrintTopline">
+              <div className="stagePrintDateVenue">
+                <div className="stagePrintMetaItem">
+                  <span className="stagePrintMetaLabel">日付</span>
+                  <strong>{stage.date || "DATE"}</strong>
+                </div>
+
+                <div className="stagePrintMetaDivider" />
+
+                <div className="stagePrintMetaItem">
+                  <span className="stagePrintMetaLabel">会場</span>
+                  <strong>{stage.venue || "VENUE"}</strong>
+                </div>
+              </div>
+
+              <p className="stagePlotMark">STAGE PLOT</p>
             </div>
 
-            <div>
-              <strong>{stage.artist || "アーティスト名"}</strong>
-              <span>{stage.date || "DATE"}</span>
-              <span>{stage.venue || "VENUE"}</span>
+            <div className="stagePrintHero">
+              <TitleBox
+                label="イベント名"
+                value={stage.title || "イベント名"}
+              />
+
+              <TitleBox
+                label="アーティスト名"
+                value={stage.artist || "アーティスト名"}
+              />
             </div>
           </div>
 
@@ -1207,6 +1274,32 @@ function StageIcon({
   }
 }
 
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  if (status === "idle") return null;
+
+  return (
+    <div
+      className={`saveIndicator saveIndicator-${status}`}
+      aria-live="polite"
+    >
+      <span className="saveIndicatorDot" />
+      {status === "saving" ? "保存中…" : "このブラウザに保存済み"}
+    </div>
+  );
+}
+
+function createPdfFileName(
+  baseName: string,
+  documentType: "setlist" | "stage-plot",
+) {
+  const safeName = baseName
+    .trim()
+    .replace(/[\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, "_");
+
+  return `${safeName || "setlisy"}-${documentType}.pdf`;
+}
+
 function SectionTitle({
   number,
   title,
@@ -1275,12 +1368,14 @@ function TextArea({
 function SetlistPreview({
   data,
   totalMinutes,
+  exportRef,
 }: {
   data: SetlistData;
   totalMinutes: number;
+  exportRef: RefObject<HTMLDivElement | null>;
 }) {
   return (
-    <div className="preview">
+    <div ref={exportRef} className="preview">
       <div className="previewTopline">
         <div className="dateVenue">
           <div className="metaItem">
