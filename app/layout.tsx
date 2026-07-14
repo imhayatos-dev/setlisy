@@ -51,8 +51,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#111111",
 };
+ verification: {
+    google: "<meta name="google-site-verification" content="HsbW2y1hnD9Hs5rseUOrM4evmPChJxcDbrnqrVStGiM" />",
+  },
+};
 
-<meta name="google-site-verification" content="HsbW2y1hnD9Hs5rseUOrM4evmPChJxcDbrnqrVStGiM" />
 
 export default function RootLayout({
   children,
